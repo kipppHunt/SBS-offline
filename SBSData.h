@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <Rtypes.h> // Include standard ROOT types
+//#include "TSpectrum.h"
 
 namespace SBSData {
   ///////////////////////////////////////////////////////////////////////////////
@@ -60,7 +61,9 @@ namespace SBSData {
     std::vector<Double_t> samples_raw; //< Raw samples
     std::vector<Double_t> samples;     //< Calibrated samples
     PulseADCData         pulse;       //< Pulse information
-    std::vector<PulseADCData> multipulse; //<Pulse information if searching for multiple pulses
+    std::vector<PulseADCData> multipulse; //< Pulse information if searching for multiple pulses
+    Double_t ExamplePulseParams; //< Parameters to define clean elastic example pulse to use for interpolation in the case of overlapping pulses
+    UInt_t n_overlaps; //< Count number of overlaps in a waveform
   };
 
   ///////////////////////////////////////////////////////////////////////////////
@@ -226,11 +229,13 @@ namespace SBSData {
       SingleData GetAmplitude() const { return fSamples.pulse.amplitude; }
       Double_t GetTimeData()    const { return fSamples.pulse.time.val; }
       Int_t GetNHits()               { return fSamples.multipulse.size(); }
+      Int_t GetNOverlaps()          { return fSamples.n_overlaps; }
       PulseADCData GetHitMulti(UInt_t i)     const { return fSamples.multipulse[i];        }
       PulseADCData GetGoodHitMulti()   const { return fSamples.multipulse[fSamples.good_hit]; }
       SingleData GetIntegralMulti(UInt_t i)  const { return GetHitMulti(i).integral;  }
       SingleData GetTimeMulti(UInt_t i)      const { return GetHitMulti(i).time;      }
       SingleData GetAmplitudeMulti(UInt_t i) const { return GetHitMulti(i).amplitude; }
+      Double_t GetExamplePulseParams() const { return fSamples.ExamplePulseParams; }
 
       // Some additional helper functions for easy access to the ADC integral
       Double_t GetDataRawMulti(UInt_t i)      const { return GetHitMulti(i).integral.raw; }
@@ -249,12 +254,14 @@ namespace SBSData {
       void SetTrigCal(Double_t var) { fSamples.trigcal = var; }
       void SetTimeOffset(Double_t var) { fSamples.timeoffset = var; }
       void SetGoodHit(Int_t i) { fSamples.good_hit = i; }
-      void SetWaveformParam(Double_t var,Int_t i1,Int_t i2,Int_t i3, Int_t i4) { fSamples.thres = var;fSamples.FixThresBin=i1;fSamples.NSB=i2;fSamples.NSA=i3;fSamples.NPedBin=i4;}
+      void SetWaveformParam(Double_t var,Int_t i1,Int_t i2,Int_t i3, Int_t i4) { fSamples.thres = var;fSamples.FixThresBin=i1;fSamples.NSB=i2;fSamples.NSA=i3;fSamples.NPedBin=i4; }
+      void SetExamplePulseParams(Double_t var) { fSamples.ExamplePulseParams;}
       // Process data sets raw value, ped-subtracted and calibrated data
       virtual void Process(std::vector<Double_t> &var);
 
       // Same as Process method, but looks for multiple pulses in the waveform window and fills multipulse vector
       virtual void ProcessMulti(std::vector<Double_t> &var);
+    //virtual void ProcessMultiMaxima(std::vector<Double_t> &var);
 
     
       // Do we have samples data for this event?

@@ -483,6 +483,7 @@ Int_t SBSGenericDetector::ReadDatabase( const TDatime& date )
   std::vector<Double_t> adc_ped, adc_gain, adc_conv, adc_thres, adc_timeoffset, adc_GoodTimeCut;
   std::vector<Double_t> adc_AmpToIntRatio;
   std::vector<Int_t> adc_FixThresBin,adc_NSB,adc_NSA,adc_NPedBin;
+  std::vector<Double_t> adc_ExamplePulseParams;
   std::vector<DBRequest> vr;
   if(WithADC()) {
     vr.push_back({ "adc.pedestal", &adc_ped,    kDoubleV, 0, 1 });
@@ -496,6 +497,7 @@ Int_t SBSGenericDetector::ReadDatabase( const TDatime& date )
     vr.push_back({ "adc.NSA",     &adc_NSA,   kIntV, 0, 1 });
     vr.push_back({ "adc.NPedBin",     &adc_NPedBin,   kIntV,0, 1 });
     vr.push_back({ "adc.GoodTimeCut",    &adc_GoodTimeCut,    kDoubleV, 0, 1 });
+    vr.push_back({ "adc.ExamplePulseParams",    &adc_ExamplePulseParams,    kDoubleV, 0, 1 });
     if (!fDisableRefADC) {
       vr.push_back({ "refadc.pedestal", &refadc_ped,    kDoubleV, 0, 1 });
       vr.push_back({ "refadc.gain",     &refadc_gain,   kDoubleV, 0, 1 });
@@ -787,9 +789,9 @@ Int_t SBSGenericDetector::ReadDatabase( const TDatime& date )
   } else if(adc_timeoffset.size() == 1) { // expand vector to specify calibration for all elements
     Double_t temp=adc_timeoffset[0];
     ResetVector(adc_timeoffset,temp,fNelem);    
-  } else if ( (int)adc_gain.size() != fNelem ) {
-    Error( Here(here), "Inconsistent number of adc.gain specified. Expected "
-	   "%d but got %d",int(adc_gain.size()),fNelem);
+  } else if ( (int)adc_timeoffset.size() != fNelem ) {
+    Error( Here(here), "Inconsistent number of adc.timeoffset specified. Expected "
+	   "%d but got %d",int(adc_timeoffset.size()),fNelem);
     return kInitError;
   }
 
@@ -878,14 +880,24 @@ Int_t SBSGenericDetector::ReadDatabase( const TDatime& date )
     return kInitError;
   }
 
-
+    if(adc_ExamplePulseParams.empty()) { // set all ExamplePulseParams to 1
+    ResetVector(adc_ExamplePulseParams,Double_t(1.0),fNelem);
+  } else if(adc_ExamplePulseParams.size() == 1) { // expand vector to specify calibration for all elements
+    Double_t temp=adc_ExamplePulseParams[0];
+    ResetVector(adc_ExamplePulseParams,temp,fNelem);    
+  } else if ( (int)adc_ExamplePulseParams.size() != fNelem ) {
+    Error( Here(here), "Inconsistent number of adc.ExamplePulseParams specified. Expected "
+	   "%d but got %d",int(adc_ExamplePulseParams.size()),fNelem);
+    return kInitError;
+  }
+    
   if(adc_GoodTimeCut.empty()) { //
     ResetVector(adc_GoodTimeCut,Double_t(0.0),fNelem);
   } else if(adc_GoodTimeCut.size() == 1) { // expand vector to specify calibration for all elements
     Double_t temp=adc_GoodTimeCut[0];
     ResetVector(adc_GoodTimeCut,temp,fNelem);    
   } else if ( (int)adc_GoodTimeCut.size() != fNelem ) {
-    Error( Here(here), "Inconsistent number of adc.ped specified. Expected "
+    Error( Here(here), "Inconsistent number of adc.GoodTimeCut specified. Expected "
 	   "%d but got %d",fNelem,int(adc_GoodTimeCut.size()));
     return kInitError;
   }
@@ -926,6 +938,7 @@ Int_t SBSGenericDetector::ReadDatabase( const TDatime& date )
 	      wave->SetAmpCal(adc_AmpToIntRatio[k]*adc_gain[k]);
 	      wave->SetTrigCal(1.);
 	      wave->SetTimeOffset(adc_timeoffset[k]);
+	      wave->SetExamplePulseParams(adc_ExamplePulseParams[k]);
             } else {
               e->SetADC(adc_ped[k],adc_gain[k]);
 	      if( fModeADC == SBSModeADC::kADC ) {
@@ -1115,6 +1128,7 @@ Int_t SBSGenericDetector::DefineVariables( EMode mode )
     
     if (fEnableMultiPulse){
       ve.push_back({ "npulses", "Number of pulses above threshold in waveform", "fGood.npulses" });
+      ve.push_back({ "noverlaps", "Number of overlaps in waveform", "fGood.noverlaps" });
     }
     
   }
@@ -1913,6 +1927,7 @@ Int_t SBSGenericDetector::CoarseProcess(TClonesArray& )// tracks)
 	      fGood.a_amptrig_c.push_back(wave->GetAmplitudeMulti(ind_mult).val*trigcal);
 	      fGood.a_time.push_back(wave->GetTimeMulti(ind_mult).val);
 	      fGood.npulses.push_back(wave->GetNHits());
+	      fGood.noverlaps.push_back(wave->GetNOverlaps());
 	      /*
 	      //kip testing output
 	      if(wave->GetNHits() >= 2 ){
@@ -2076,11 +2091,12 @@ Int_t SBSGenericDetector::FindGoodHit(SBSElement *blk)
 	Int_t HitIndex = -1;
 	Double_t GoodTimeCut = wave->GetGoodTimeCut(); //using this from adc for now
 	for (Int_t ih=0; ih<nhits; ih++) {
+	  Double_t PulseTimeRaw = wave->GetTimeMulti(ih).raw;
 	  Double_t PulseTime = wave->GetTimeDataMulti(ih);
 	  //this finds the best timed hit from the pulses in the multipulse vector
 	  //do we want to store multiple of these within a threshold of PulseTime-GoodTimeCut?
 	  //if so need a separate SetGoodHitMulti setter method
-	  if (PulseTime > 0 && abs(PulseTime-GoodTimeCut) < MinDiff) {
+	  if (PulseTimeRaw > 0 && abs(PulseTime-GoodTimeCut) < MinDiff) {
 	    HitIndex = ih;
 	    MinDiff = abs(PulseTime - GoodTimeCut);
 	  }
