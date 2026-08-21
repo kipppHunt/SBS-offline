@@ -274,27 +274,124 @@ namespace SBSData {
       fSamples.samples[i] = (fSamples.samples_raw[i]-fSamples.ped)*fSamples.cal;
     }
     
-    // Look for multiple threshold crossings
+    // Look for local maxima instead of just threshold crossings
     Double_t ThresVal=GetThres(); // mV
-    UInt_t ThresCrossBin=TMath::Max(NPedsum-1,0);
-    std::vector<UInt_t> ThresCrossBinList;
-    //    std::cout << " ped = " << fSamples.ped << " thres = " << ThresVal << std::endl ;
-    while ( ThresCrossBin < vals.size() ) {
-      //look for threshold crossings
-      if( fSamples.samples_raw[ThresCrossBin] >= fSamples.ped+ThresVal ){
-	//incase first sample is above threshold (is this necessary?)
-	if( ThresCrossBin == 0 ){
-	  ThresCrossBinList.push_back(ThresCrossBin);
-	//otherwise just check that the previous sample was actually below threshold so we dont just add all samples above threshold
-	}else if( fSamples.samples_raw[ThresCrossBin-1] < fSamples.ped+ThresVal ){
-	  ThresCrossBinList.push_back(ThresCrossBin);
-	}
+    //max betwen NPedsum-1 and 1 since we want to compare to a previous sample as well
+    //should it be just NPedsum instead of subtracting 1?
+    UInt_t LocalMaxBin=TMath::Max(NPedsum-1,1);
+    std::vector<UInt_t> LocalMaxBinList;
+    while ( LocalMaxBin < vals.size() ) {
+      //look for local max above thres
+      Double_t currSamp = fSamples.samples_raw[LocalMaxBin], prevSamp = fSamples.samples_raw[LocalMaxBin-1], nextSamp = fSamples.samples_raw[LocalMaxBin+1];
+      if( currSamp >= fSamples.ped+ThresVal && currSamp > prevSamp && currSamp > nextSamp){
+	LocalMaxBinList.push_back(LocalMaxBin);
       }
-      ThresCrossBin++;
+      LocalMaxBin++;
     }
     //
- 
+
+    //maybe we want to wait to fill this until after erasing unwanted peaks after some discrimination based on peak prominence
     fSamples.multipulse.resize(ThresCrossBinList.size());
+
+
+    //loop over maxima and do peak erasing, taken from SBSGEMModule::find_clusters_1D_experimental
+
+    vector<int> peaks_to_erase;
+
+    int n_peaks_erased = 0;
+    
+    for( auto maxima_bin_iter : LocalMaxBinList ){
+
+      double ADCmax = fSamples.samples_raw[maxima_bin_iter];
+      double prominence = ADCmax;
+      int samplo = maxima_bin_iter, samphi = maxima_bin_iter;
+      double ADCminright = ADCmax, ADCminleft = ADCmax;
+
+      bool higherpeakleft = false, higherpeakright = false;
+      int peakright = -1, peakleft = -1;
+
+      //sigma_max should be based on the individual ch threshold which is defined as something like 3x the pedrms for that ch (atleast 3x for ecal, need to check hcal)
+      double sigma_max = ThresVal/3.0;
+
+      //search for potentially overlapping pulses to the right of current local max
+      while( fSamples.samples_raw.find( samphi + 1 ) != fSamples.samples_raw.end() ){
+	
+	samphi++;
+	double ADCtest = fSamples.samples_raw[samphi];
+
+	//want to find lowest sample before next peak
+	if( ADCtest < ADCminright && !higherpeakright ){
+	  ADCminright = ADCtest;
+	}
+
+	//if this eval true then we have found a higher peak to the right of this local maxima so we will want to erase it if it doesnt pass prominence threshold
+	if( LocalMaxBinList.find(samphi) != LocalMaxBinList.end() && ADCtest > ADCmax ){
+	  higherpeakright = true;
+	  peakright = samphi;
+	  break;
+	}
+
+      }
+
+      //search for potentially overlapping pulses to the left of current local max
+      while( fSamples.samples_raw.find( samplo - 1 ) != fSamples.samples_raw.end() ){
+	
+	samplo++;
+	double ADCtest = fSamples.samples_raw[samplo];
+
+	//want to find lowest sample before next peak
+	if( ADCtest < ADCminleft && !higherpeakleft ){
+	  ADCminleft = ADCtest;
+	}
+
+	//if this eval true then we have found a higher peak to the left of this local maxima so we will want to erase it if it doesnt pass prominence threshold
+	if( LocalMaxBinList.find(samplo) != LocalMaxBinList.end() && ADCtest > ADCmax ){
+	  higherpeakleft = true;
+	  peakleft = samplo;
+	  break;
+	}
+
+      }
+
+      bool peak_close = false;
+      if( !higherpeakleft ) ADCminleft = 0.0;
+      if( !higherpeakright ) ADCminright = 0.0;
+
+      double sigma = ThresVal/3.0;
+      double prom_thres_sigma_factor = 1.0;
+
+      int max_peak_time_sep = 6;
+ 
+      //prominence is vertical diff btwn peaks, adc val diff
+      //max separation here will be time difference btwn peaks, horizontal
+      if( higherpeakright || higherpeakleft ){
+	
+	prominence = ADCmax - std::max ( ADCminleft, ADCminright );// define prom as diff btwn current max and highest valley to left or right
+
+	if( higherpeakleft && std::abs( peakleft - maxima_bin_iter ) <= 2*max_peak_time_sep ) peak_close = true;
+	if( higherpeakright && std:: abs( peakright - maxima_bin_iter ) <= 2*max_peak_time_sep ) peak_close = true;
+
+	//for now just defining prom threshold, include fraction of current peak later
+	if( peak_close && prominence < prom_thres_sigma_factor*sigma ) n_peaks_erased++;
+
+	peaks_to_erase.push_back( maxima_bin_iter )
+	
+      }
+
+    }//end of loop over local max
+
+
+
+    for( auto peak_ind : peaks_to_erase ){
+      LocalMaxBinList.erase(peak_ind);
+    }
+
+    //now, similar to the SBSGEMModule method, we want to split remaining significant pulses and split any overlapping pulses contributions
+   
+
+
+
+    
     
     //Loop over all threshold crossings
     for(int ncross = 0; ncross < ThresCrossBinList.size(); ncross++){
