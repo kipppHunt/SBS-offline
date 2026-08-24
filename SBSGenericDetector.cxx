@@ -486,6 +486,7 @@ Int_t SBSGenericDetector::ReadDatabase( const TDatime& date )
   std::vector<Double_t> adc_ped, adc_gain, adc_conv, adc_thres, adc_timeoffset, adc_GoodTimeCut;
   std::vector<Double_t> adc_AmpToIntRatio;
   std::vector<Int_t> adc_FixThresBin,adc_NSB,adc_NSA,adc_NPedBin;
+  std::vector<Double_t> adc_ExamplePulseParams;
   std::vector<DBRequest> vr;
   if(WithADC()) {
     vr.push_back({ "adc.pedestal", &adc_ped,    kDoubleV, 0, 1 });
@@ -499,6 +500,7 @@ Int_t SBSGenericDetector::ReadDatabase( const TDatime& date )
     vr.push_back({ "adc.NSA",     &adc_NSA,   kIntV, 0, 1 });
     vr.push_back({ "adc.NPedBin",     &adc_NPedBin,   kIntV,0, 1 });
     vr.push_back({ "adc.GoodTimeCut",    &adc_GoodTimeCut,    kDoubleV, 0, 1 });
+    vr.push_back({ "adc.ExamplePulseParams",    &adc_ExamplePulseParams,    kDoubleV, 0, 1 });
     if (!fDisableRefADC) {
       vr.push_back({ "refadc.pedestal", &refadc_ped,    kDoubleV, 0, 1 });
       vr.push_back({ "refadc.gain",     &refadc_gain,   kDoubleV, 0, 1 });
@@ -893,6 +895,17 @@ Int_t SBSGenericDetector::ReadDatabase( const TDatime& date )
     return kInitError;
   }
 
+  if(adc_ExamplePulseParams.empty()) { // set all ExamplePulseParams to 1
+    ResetVector(adc_ExamplePulseParams,Double_t(1.0),fNelem);
+  } else if(adc_ExamplePulseParams.size() == 1) { // expand vector to specify calibration for all elements
+    Double_t temp=adc_ExamplePulseParams[0];
+    ResetVector(adc_ExamplePulseParams,temp,fNelem);    
+  } else if ( (int)adc_ExamplePulseParams.size() != fNelem ) {
+    Error( Here(here), "Inconsistent number of adc.ExamplePulseParams specified. Expected "
+	   "%d but got %d",int(adc_ExamplePulseParams.size()),fNelem);
+    return kInitError;
+  }
+
 
   // Before finishing, prepare vectors that will hold variable output data
   if( !fIsInit ) {
@@ -929,6 +942,7 @@ Int_t SBSGenericDetector::ReadDatabase( const TDatime& date )
 	      wave->SetAmpCal(adc_AmpToIntRatio[k]*adc_gain[k]);
 	      wave->SetTrigCal(1.);
 	      wave->SetTimeOffset(adc_timeoffset[k]);
+	      wave->SetExamplePulseParams(adc_ExamplePulseParams[k]);
             } else {
               e->SetADC(adc_ped[k],adc_gain[k]);
 	      if( fModeADC == SBSModeADC::kADC ) {

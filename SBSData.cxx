@@ -280,19 +280,20 @@ namespace SBSData {
     //should it be just NPedsum instead of subtracting 1?
     UInt_t LocalMaxBin=TMath::Max(NPedsum-1,1);
     std::vector<UInt_t> LocalMaxBinList;
+    std::vector<UInt_t> ThresCrossBinList;
     while ( LocalMaxBin < vals.size() ) {
-      //look for local max above thres
       Double_t currSamp = fSamples.samples_raw[LocalMaxBin], prevSamp = fSamples.samples_raw[LocalMaxBin-1], nextSamp = fSamples.samples_raw[LocalMaxBin+1];
+      //find threshold crossings
+      if( currSamp >= fSamples.ped+ThresVal && prevSamp < fSamples.ped+ThresVal ){
+	ThresCrossBinList.push_back(LocalMaxBin);
+      }
+      //look for local max above thres
       if( currSamp >= fSamples.ped+ThresVal && currSamp > prevSamp && currSamp > nextSamp){
 	LocalMaxBinList.push_back(LocalMaxBin);
       }
       LocalMaxBin++;
     }
     //
-
-    //maybe we want to wait to fill this until after erasing unwanted peaks after some discrimination based on peak prominence
-    fSamples.multipulse.resize(ThresCrossBinList.size());
-
 
     //loop over maxima and do peak erasing, taken from SBSGEMModule::find_clusters_1D_experimental
 
@@ -380,22 +381,43 @@ namespace SBSData {
 
     }//end of loop over local max
 
-
-
     for( auto peak_ind : peaks_to_erase ){
       LocalMaxBinList.erase(peak_ind);
     }
 
+    fSamples.multipulse.resize(LocalMaxBinList.size());
+
     //now, similar to the SBSGEMModule method, we want to split remaining significant pulses and split any overlapping pulses contributions
    
-
-
-
+    //first idea: scale example elastic pulse per ch to match their first samp above threshold and their peak samp, then use that scaled version of the example elastic pulse to estimate the actual decay of the first pulse to be subtracted from the samples convolved with following pulse
     
+    //need some provision in DB or somewhere to put example elastic pulses
+
+    for(int local_max_iter = 0; local_max_iter < LocalMaxBinList.size(); local_max_iter++){
+
+      //starting assumption: if we can find a clean start to the rise of the first pulse in the waveform and its peak sample, then we can scale the "reference" pulse linearly to fit the shape determined by the starting point and peak of the pulse
+      //find ratio of number of samps between start and peak of "reference" pulse and number of samps between start and peak of the actual pulse here to find horizontal scale factor
+      //find ratio of peak amplitudes between "reference" pulse and actual pulse here to find vertical scale factor
+      //then use these factors to scale the "reference" pulse to match the actual pulse here and then find the amplitude at the time-values (x-axis) coming after the peak sample
+      //this is currently giving the sample values of the template pulses
+      std::vector<Double_t> template_pulse = GetExamplePulseParams();
+      TSpline3 *cubic_spline = new TSpline3("cubic_spline",0,template_pulse.size(),template_pulse.data(),template_pulse.size());
+      Int_t template_dist_to_peak = std::max_element(template_pulse.begin(), template_pulse.end());
+      Int_t SampsFromStartToPeak = LocalMaxBinList[local_max_iter] - ThresCrossBinList[local_max_iter];
+      Double_t template_peak = template_pulse[template_dist_to_peak];
+      Double_t real_pulse_peak = fSamples.samples_raw[LocalMaxBinList[local_max_iter]];
+      Double_t h_scale = SampsFromStartToPeak / template_dist_to_peak;
+      Double_t v_scale = real_pulse_peak / template_peak;
+      Int_t max_samps_after_peak = 5;
+      for(int samp_after_peak = SampsFromStartToPeak; samp_after_peak < max_samps_after_peak; samp_after_peak++){
+	Double_t scaled_samp = v_scale*cubic_spline->Eval(samp_after_peak*h_scale);
+      }
+      
+    }
     
     //Loop over all threshold crossings
     for(int ncross = 0; ncross < ThresCrossBinList.size(); ncross++){
-
+      
       // if threshold crossing found
       UInt_t NSB = GetNSB();
       UInt_t NSA = GetNSA();

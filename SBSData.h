@@ -61,6 +61,7 @@ namespace SBSData {
     std::vector<Double_t> samples;     //< Calibrated samples
     PulseADCData         pulse;       //< Pulse information
     std::vector<PulseADCData> multipulse; //<Pulse information if searching for multiple pulses
+    Double_t ExamplePulseParams; //< Parameters to define clean elastic example pulse to use for interpolation in the case of overlapping pulses
   };
 
   ///////////////////////////////////////////////////////////////////////////////
@@ -231,6 +232,7 @@ namespace SBSData {
       SingleData GetIntegralMulti(UInt_t i)  const { return GetHitMulti(i).integral;  }
       SingleData GetTimeMulti(UInt_t i)      const { return GetHitMulti(i).time;      }
       SingleData GetAmplitudeMulti(UInt_t i) const { return GetHitMulti(i).amplitude; }
+      Double_t GetExamplePulseParams() const { return fSamples.ExamplePulseParams; }
 
       // Some additional helper functions for easy access to the ADC integral
       Double_t GetDataRawMulti(UInt_t i)      const { return GetHitMulti(i).integral.raw; }
@@ -250,6 +252,7 @@ namespace SBSData {
       void SetTimeOffset(Double_t var) { fSamples.timeoffset = var; }
       void SetGoodHit(Int_t i) { fSamples.good_hit = i; }
       void SetWaveformParam(Double_t var,Int_t i1,Int_t i2,Int_t i3, Int_t i4) { fSamples.thres = var;fSamples.FixThresBin=i1;fSamples.NSB=i2;fSamples.NSA=i3;fSamples.NPedBin=i4;}
+      void SetExamplePulseParams(Double_t var) { fSamples.ExamplePulseParams;}
       // Process data sets raw value, ped-subtracted and calibrated data
       virtual void Process(std::vector<Double_t> &var);
 
