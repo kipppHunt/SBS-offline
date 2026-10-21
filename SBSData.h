@@ -4,6 +4,8 @@
 #include <vector>
 #include <Rtypes.h> // Include standard ROOT types
 
+class TF1;
+
 namespace SBSData {
   ///////////////////////////////////////////////////////////////////////////////
   // Single valued data structure
@@ -205,6 +207,8 @@ namespace SBSData {
                        Double_t GoodTimeCut = 1.0, Double_t tcal = 4.0 );
       virtual ~Waveform() = default;;
 
+      TF1 *template_pulse_scaled;
+
       // Getters
       Double_t GetPed()         const { return fSamples.ped; }
       Double_t GetGain()        const { return fSamples.cal; }
@@ -252,13 +256,15 @@ namespace SBSData {
       void SetTimeOffset(Double_t var) { fSamples.timeoffset = var; }
       void SetGoodHit(Int_t i) { fSamples.good_hit = i; }
       void SetWaveformParam(Double_t var,Int_t i1,Int_t i2,Int_t i3, Int_t i4) { fSamples.thres = var;fSamples.FixThresBin=i1;fSamples.NSB=i2;fSamples.NSA=i3;fSamples.NPedBin=i4;}
-      void SetExamplePulseParams(Double_t var) { fSamples.ExamplePulseParams;}
+      void SetExamplePulseParams(Double_t var) { fSamples.ExamplePulseParams = var;}
       // Process data sets raw value, ped-subtracted and calibrated data
       virtual void Process(std::vector<Double_t> &var);
 
       // Same as Process method, but looks for multiple pulses in the waveform window and fills multipulse vector
       virtual void ProcessMulti(std::vector<Double_t> &var);
 
+      // Same as Process Multi but finds all local maxima via time-sample deconvolution method to handle overlapping pulses and low-amp pulses in the presence of noise
+      virtual void ProcessDecon(std::vector<Double_t> &var);
     
       // Do we have samples data for this event?
       Bool_t HasData() const { return fHasData; }

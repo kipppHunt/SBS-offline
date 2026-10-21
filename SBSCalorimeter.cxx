@@ -395,7 +395,9 @@ Int_t SBSCalorimeter::MakeGoodBlocks()
 	  fGoodBlocks.gain.push_back(blk->GetAgain());
 	  fGoodBlocks.ADCTime.push_back(ahit.time.val);
 	} else {
-	  if(fEnableMultiPulse){
+	  //KIP TEMPORARY TESTING
+	  //if(fEnableMultiPulse){
+	  if(fEnableMultiPulse || !fEnableMultiPulse){
 	    SBSData::Waveform *wave = blk->Waveform();
 	    Int_t ind_mult = wave->GetGoodHitIndex();
 	    blk->SetE(wave->GetIntegralMulti(ind_mult).val);

@@ -1266,7 +1266,8 @@ Int_t SBSGenericDetector::DecodeADC( const THaEvData& evdata,
     if(fEnableMultiPulse){
       blk->Waveform()->ProcessMulti(samples);
     }else{
-      blk->Waveform()->Process(samples);
+      //TEMPORARY: for testing deconvolution method with just ecal
+      blk->Waveform()->ProcessDecon(samples);
     }
     samples.clear();
     SBSData::Waveform *wave = blk->Waveform();
@@ -1274,7 +1275,7 @@ Int_t SBSGenericDetector::DecodeADC( const THaEvData& evdata,
       //time.raw and time.val are already set in SBSData.cxx for multipulse in ProcessMulti
       //wave->SetValTime(wave->GetTimeMulti(wave->GetGoodHitIndex()).val- reftime); //using GetTimeMulti
     }else{
-      wave->SetValTime(wave->GetTime().val- reftime);
+      //wave->SetValTime(wave->GetTime().val- reftime);
     }
   }
   return nhit;
@@ -1911,8 +1912,9 @@ Int_t SBSGenericDetector::CoarseProcess(TClonesArray& )// tracks)
 	    Double_t gain= wave->GetGain();
 	    Double_t again=wave->GetAmpCal();	      
 	    Double_t trigcal=wave->GetTrigCal();
-	    
-	    if(fEnableMultiPulse == true){
+
+	    //KIP TEMP TESTING
+	    if(fEnableMultiPulse|| !fEnableMultiPulse){
 	      Int_t ind_mult = wave->GetGoodHitIndex();
 	      fGood.ped.push_back(wave->GetPed());
 	      fGood.a_mult.push_back(wave->GetNHits());
@@ -1951,7 +1953,8 @@ Int_t SBSGenericDetector::CoarseProcess(TClonesArray& )// tracks)
 	    fGood.a_mult.push_back(0);
 	    fGood.ped.push_back(wave->GetPed());
 	    Double_t gain= wave->GetGain();
-	    if(fEnableMultiPulse == true){
+	    //KIP TEMP TESTING
+	    if(fEnableMultiPulse || !fEnableMultiPulse){
 	      Int_t ind_mult = wave->GetGoodHitIndex();
 	      fGood.a.push_back(wave->GetIntegralMulti(ind_mult).raw);
 	      fGood.a_p.push_back(wave->GetIntegralMulti(ind_mult).val/gain);
@@ -2024,7 +2027,7 @@ Int_t SBSGenericDetector::FindGoodHit(SBSElement *blk)
       wave->SetGoodHit(-1);
       if (wave->HasData())  {
 	Int_t HitIndex = -1;
-	if(fEnableMultiPulse == true){
+	if(fEnableMultiPulse || !fEnableMultiPulse){
 	  Int_t nhits = wave->GetNHits(); //returns size of multipulse vector
 	  Double_t MinDiff = 10000.;
 	  Double_t GoodTimeCut = wave->GetGoodTimeCut(); //using this from adc for now
